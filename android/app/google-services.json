@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "863505535509",
+    "project_id": "a04marketplace",
+    "storage_bucket": "a04marketplace.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:863505535509:android:ae201bd28d5c869b21341c",
+        "android_client_info": {
+          "package_name": "com.example.a04_marketplace"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "863505535509-taafmsq4vh4n3p6u2ranpn94rvnkniui.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqBFOY7TVKniEJvZYhvrvWpO6tmjU3XF4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "863505535509-taafmsq4vh4n3p6u2ranpn94rvnkniui.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "863505535509-de3rehm61od1kfes9rsf9gl6k799otbn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.a04Marketplace"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
