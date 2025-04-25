@@ -24,6 +24,7 @@ class SellPage extends StatefulWidget {
 
 class _SellPageState extends State<SellPage> {
   final _formKey = GlobalKey<FormState>();
+  bool _isSubmitting = false;
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _locationController = TextEditingController();
@@ -160,8 +161,11 @@ class _SellPageState extends State<SellPage> {
 
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isSubmitting = true); // Start spinner
+
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('User not logged in.')));
         return;
@@ -171,12 +175,14 @@ class _SellPageState extends State<SellPage> {
       final price = int.tryParse(_priceController.text);
 
       if (price == null || _selectedAge == null) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Please enter valid numbers for price and age.')));
         return;
       }
 
       if (_selectedImages.isEmpty && _existingImages.isEmpty) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Please select at least one image.')));
         return;
@@ -188,8 +194,8 @@ class _SellPageState extends State<SellPage> {
       final health = _selectedHealth;
       final name = _nameController.text;
 
-      // Ensure geolocation is available before submitting
       if (_geolocation == null) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Geolocation is not available.')));
         return;
@@ -203,6 +209,7 @@ class _SellPageState extends State<SellPage> {
       imageUrls.addAll(_existingImages);
 
       if (imageUrls.isEmpty) {
+        setState(() => _isSubmitting = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Failed to upload images')));
@@ -222,7 +229,7 @@ class _SellPageState extends State<SellPage> {
             health: health!,
             age: _selectedAge!,
             images: imageUrls,
-            geolocation: _geolocation, // Use local geolocation
+            geolocation: _geolocation,
           );
         } else {
           await _dbHelper.addGoat(
@@ -235,16 +242,14 @@ class _SellPageState extends State<SellPage> {
             age: _selectedAge!,
             images: imageUrls,
             userId: userId,
-            geolocation: _geolocation, // Use local geolocation
+            geolocation: _geolocation,
           );
         }
 
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => SellingPage(), // Navigate to SellingPage
-            ),
+            MaterialPageRoute(builder: (context) => SellingPage()),
           );
         }
       } catch (e) {
@@ -252,6 +257,10 @@ class _SellPageState extends State<SellPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $e')),
           );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSubmitting = false); // Stop spinner
         }
       }
     }
@@ -292,13 +301,65 @@ class _SellPageState extends State<SellPage> {
                         children: [
                           ..._selectedImages.map((image) => Padding(
                                 padding: const EdgeInsets.all(10.0),
-                                child: Image.file(File(image.path),
-                                    width: 100, height: 100, fit: BoxFit.cover),
+                                child: Stack(
+                                  children: [
+                                    Image.file(File(image.path),
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover),
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedImages.remove(image);
+                                          });
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.black.withOpacity(0.5),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close,
+                                              color: Colors.white, size: 20),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               )),
                           ..._existingImages.map((url) => Padding(
                                 padding: const EdgeInsets.all(10.0),
-                                child: Image.network(url,
-                                    width: 100, height: 100, fit: BoxFit.cover),
+                                child: Stack(
+                                  children: [
+                                    Image.network(url,
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover),
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _existingImages.remove(url);
+                                          });
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.black.withOpacity(0.5),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close,
+                                              color: Colors.white, size: 20),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               )),
                         ],
                       ),
@@ -451,10 +512,12 @@ class _SellPageState extends State<SellPage> {
                 ],
               ),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _submitForm,
-                child: const Text('Submit'),
-              ),
+              _isSubmitting
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                      onPressed: _submitForm,
+                      child: const Text('Submit'),
+                    ),
             ],
           ),
         ),
