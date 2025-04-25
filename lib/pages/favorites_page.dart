@@ -1,8 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/items_list_widget.dart';
 import '../widgets/menu_widget.dart';
-import '../services/database_helper.dart'; // Import the DatabaseHelper
+import '../services/database_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FavoritesPage extends StatefulWidget {
@@ -14,8 +15,8 @@ class FavoritesPage extends StatefulWidget {
 
 class _FavoritesPageState extends State<FavoritesPage> {
   List<Map<String, dynamic>> _favoriteGoats = [];
-  final DatabaseHelper _databaseHelper =
-      DatabaseHelper(); // Initialize DatabaseHelper
+  bool _isLoading = true; // Add loading flag
+  final DatabaseHelper _databaseHelper = DatabaseHelper();
 
   @override
   void initState() {
@@ -27,33 +28,54 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('favorites')
-        .where('userId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
-        .get();
-
-    final List<Map<String, dynamic>> fullGoatData = [];
-
-    for (var doc in snapshot.docs) {
-      final goatId = doc['goatId'];
-      final goatSnapshot = await FirebaseFirestore.instance
-          .collection('goats')
-          .doc(goatId)
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('favorites')
+          .where('userId', isEqualTo: userId)
+          .orderBy('timestamp', descending: true)
           .get();
 
-      if (goatSnapshot.exists) {
-        final goatData = goatSnapshot.data()!;
-        fullGoatData.add({
-          'id': goatId,
-          ...goatData,
-        });
-      }
-    }
+      final List<String> goatIds =
+          snapshot.docs.map((doc) => doc['goatId'] as String).toList();
 
-    setState(() {
-      _favoriteGoats = fullGoatData;
-    });
+      if (goatIds.isEmpty) {
+        setState(() {
+          _favoriteGoats = [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final goatFutures = goatIds.map((goatId) {
+        return FirebaseFirestore.instance.collection('goats').doc(goatId).get();
+      }).toList();
+
+      final goatSnapshots = await Future.wait(goatFutures);
+
+      final List<Map<String, dynamic>> fullGoatData = [];
+
+      for (var goatSnapshot in goatSnapshots) {
+        if (goatSnapshot.exists) {
+          final goatData = goatSnapshot.data()!;
+          fullGoatData.add({
+            'id': goatSnapshot.id,
+            ...goatData,
+          });
+        }
+      }
+
+      setState(() {
+        _favoriteGoats = fullGoatData;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error loading favorite goats: $e");
+      }
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _toggleFavorite(String goatId) async {
@@ -63,24 +85,20 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final isFavorite = _favoriteGoats.any((goat) => goat['id'] == goatId);
 
     setState(() {
-      // Toggle the heart color to white immediately after the press
       if (isFavorite) {
         _favoriteGoats.removeWhere((goat) => goat['id'] == goatId);
       } else {
-        // Add the goat to favorites list
         _favoriteGoats.add({'id': goatId});
       }
     });
 
     if (isFavorite) {
-      // Remove from Firestore and local DB
       await _databaseHelper.removeFavorite(userId: userId, goatId: goatId);
       await FirebaseFirestore.instance
           .collection('favorites')
           .doc('${userId}_$goatId')
           .delete();
     } else {
-      // Add to Firestore and local DB
       await _databaseHelper.addFavorite(userId: userId, goatId: goatId);
       await FirebaseFirestore.instance
           .collection('favorites')
@@ -92,7 +110,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
       });
     }
 
-    _loadFavoriteGoats(); // Reload the favorite goats to reflect the new state
+    _loadFavoriteGoats();
   }
 
   @override
@@ -100,14 +118,17 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return MenuWidget(
       title: 'Favorites',
       selectedIndex: 1,
-      child: ItemsListWidget(
-        goats: _favoriteGoats,
-        favoriteGoatIds:
-            _favoriteGoats.map((goat) => goat['id'] as String).toList(),
-        showFavorites: true, // Display only the hearts
-        onFavoriteToggle:
-            _toggleFavorite, // Pass the toggle function to ItemsListWidget
-      ),
+      child: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : ItemsListWidget(
+              goats: _favoriteGoats,
+              favoriteGoatIds:
+                  _favoriteGoats.map((goat) => goat['id'] as String).toList(),
+              showFavorites: true,
+              onFavoriteToggle: _toggleFavorite,
+            ),
     );
   }
 }
